@@ -1,0 +1,14 @@
+{
+  "name": "vless-to-clash-sub",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker that converts VLESS node URLs from environment variables into a Clash/Mihomo YAML subscription.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

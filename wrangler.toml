@@ -1,0 +1,8 @@
+name = "vless-to-clash-sub"
+main = "src/index.js"
+compatibility_date = "2026-05-31"
+
+# Do not store real tokens or node URLs in this file.
+# Configure secrets and variables in the Cloudflare Dashboard or with:
+# wrangler secret put SUB_TOKEN
+# wrangler secret put NODE_LA
