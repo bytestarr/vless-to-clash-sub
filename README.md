@@ -42,6 +42,28 @@ No real node URL, UUID, server name, custom domain, or token should be committed
 | `CUSTOM_RULES_Provider` | No | Raw YAML content placed under `rule-providers:`. If empty, no `rule-providers` section is emitted. |
 | `CUSTOM_RULES` | No | Clash rules, one rule per line. Lines may start with `-` or `*`. |
 
+## Keep Dashboard Variables
+
+This project sets the following option in `wrangler.toml`:
+
+```toml
+keep_vars = true
+```
+
+This tells Cloudflare/Wrangler to preserve variables configured in the Cloudflare Dashboard during deployments. Without this option, a deployment from GitHub or Wrangler can replace Dashboard variables with the values defined in `wrangler.toml`.
+
+Do not put real `SUB_TOKEN` or `NODE_...` values in `wrangler.toml`. Keep them in Cloudflare Dashboard under Workers & Pages -> your Worker -> Settings -> Variables and Secrets.
+
+Recommended variable types:
+
+| Name | Recommended type |
+| --- | --- |
+| `SUB_TOKEN` | Secret |
+| `NODE_*` | Secret |
+| `SUB_NAME` | Text or Secret |
+| `CUSTOM_RULES_Provider` | Text or Secret |
+| `CUSTOM_RULES` | Text or Secret |
+
 Example:
 
 ```env
