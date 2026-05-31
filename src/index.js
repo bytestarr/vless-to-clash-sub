@@ -1,17 +1,3 @@
-const DEFAULT_RULE_PROVIDERS = `reject:
-  type: http
-  behavior: domain
-  url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/reject.txt"
-  path: ./ruleset/reject.yaml
-  interval: 86400
-
-gfw:
-  type: http
-  behavior: domain
-  url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/gfw.txt"
-  path: ./ruleset/gfw.yaml
-  interval: 86400`;
-
 const DEFAULT_RULES = [
   "GEOSITE,category-ads-all,REJECT",
   "GEOIP,private,DIRECT",
@@ -21,6 +7,7 @@ const DEFAULT_RULES = [
 ];
 
 const SUBSCRIPTION_PATH = "/clash";
+const DEFAULT_SUBSCRIPTION_NAME = "VLESS Subscription";
 
 export default {
   async fetch(request, env) {
@@ -30,12 +17,15 @@ export default {
         return textResponse("Forbidden", 403);
       }
 
+      const subscriptionName = getSubscriptionName(env);
       const yaml = buildSubscription(env);
       return new Response(yaml, {
         status: 200,
         headers: {
           "content-type": "text/yaml; charset=utf-8",
           "cache-control": "no-store",
+          "profile-title": encodeURIComponent(subscriptionName),
+          "content-disposition": `inline; filename="${sanitizeFilename(subscriptionName)}.yaml"`,
         },
       });
     } catch (error) {
@@ -166,10 +156,12 @@ export function parseVlessUrl(envName, rawUrl) {
 
 export function renderClashYaml(proxies, env) {
   const proxyNames = proxies.map((proxy) => proxy.name);
-  const ruleProviders = normalizeRawYaml(env.CUSTOM_RULES_Provider || DEFAULT_RULE_PROVIDERS);
+  const subscriptionName = getSubscriptionName(env);
+  const ruleProviders = normalizeRawYaml(env.CUSTOM_RULES_Provider);
   const rules = parseRules(env.CUSTOM_RULES);
 
   const doc = {
+    name: subscriptionName,
     "mixed-port": 7890,
     "allow-lan": false,
     mode: "rule",
@@ -193,8 +185,10 @@ export function renderClashYaml(proxies, env) {
 
   const lines = [];
   lines.push(...yamlLines(doc));
-  lines.push("rule-providers:");
-  lines.push(...indentLines(ruleProviders, 2));
+  if (ruleProviders) {
+    lines.push("rule-providers:");
+    lines.push(...indentLines(ruleProviders, 2));
+  }
   lines.push("rules:");
   for (const rule of rules) {
     lines.push(`  - ${quoteYamlString(rule)}`);
@@ -218,6 +212,20 @@ function parseRules(rawRules) {
 
 function normalizeRawYaml(value) {
   return String(value || "").trimEnd();
+}
+
+function getSubscriptionName(env) {
+  const name = String(env.SUB_NAME || "").trim();
+  return name || DEFAULT_SUBSCRIPTION_NAME;
+}
+
+function sanitizeFilename(value) {
+  return String(value)
+    .replace(/[^\x20-\x7E]+/g, "-")
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "subscription";
 }
 
 function addParam(target, key, value) {

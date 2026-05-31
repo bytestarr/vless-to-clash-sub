@@ -2,9 +2,9 @@
 
 Cloudflare Worker subscription generator for converting multiple VLESS node URLs into one Clash / Mihomo compatible YAML subscription.
 
-The Worker reads every environment variable whose name starts with `NODE_`, parses the VLESS URL, converts each node into a `proxies` entry, adds `proxy-groups`, adds `rule-providers`, and returns a complete `clash.yaml` response from `/clash?token=...`.
+The Worker reads every environment variable whose name starts with `NODE_`, parses the VLESS URL, converts each node into a `proxies` entry, adds `proxy-groups`, optionally adds `rule-providers`, and returns a complete `clash.yaml` response from `/clash?token=...`.
 
-No real node URL, UUID, server name, or token should be committed to this repository. Configure those values only in Cloudflare Worker environment variables or secrets.
+No real node URL, UUID, server name, custom domain, or token should be committed to this repository. Configure those values only in Cloudflare Worker environment variables or secrets.
 
 ## Features
 
@@ -15,20 +15,21 @@ No real node URL, UUID, server name, or token should be committed to this reposi
 - Supports Reality nodes for Clash Meta / Mihomo with `reality-opts`.
 - Uses the VLESS URL hash as the node name, for example `#LA-Reality`.
 - Falls back to the environment variable suffix, for example `NODE_LA` becomes `LA`.
+- Supports a configurable subscription name through `SUB_NAME`.
 - Protects the subscription with `SUB_TOKEN`.
-- Returns subscription-friendly headers: `text/yaml; charset=utf-8` and `cache-control: no-store`.
+- Returns subscription-friendly headers: `text/yaml; charset=utf-8`, `cache-control: no-store`, `profile-title`, and `content-disposition`.
 
 ## Project Structure
 
 ```text
 .
-├── .env.example
-├── .gitignore
-├── README.md
-├── package.json
-├── src/
-│   └── index.js
-└── wrangler.toml
+|-- .env.example
+|-- .gitignore
+|-- README.md
+|-- package.json
+|-- src/
+|   `-- index.js
+`-- wrangler.toml
 ```
 
 ## Environment Variables
@@ -36,17 +37,31 @@ No real node URL, UUID, server name, or token should be committed to this reposi
 | Name | Required | Description |
 | --- | --- | --- |
 | `SUB_TOKEN` | Yes | Long random token required to access `/clash`. |
+| `SUB_NAME` | No | Subscription name shown in the YAML and response headers. Defaults to `VLESS Subscription`. |
 | `NODE_*` | Yes | One or more VLESS URLs. Any variable beginning with `NODE_` is included. |
-| `CUSTOM_RULES_Provider` | No | Raw YAML content placed under `rule-providers:`. |
+| `CUSTOM_RULES_Provider` | No | Raw YAML content placed under `rule-providers:`. If empty, no `rule-providers` section is emitted. |
 | `CUSTOM_RULES` | No | Clash rules, one rule per line. Lines may start with `-` or `*`. |
 
 Example:
 
 ```env
 SUB_TOKEN=replace-with-a-long-random-token
+SUB_NAME=My VLESS Subscription
 NODE_LA=vless://uuid@example.com:443?type=tcp&security=reality&pbk=public-key&sid=short-id&sni=example.com&fp=chrome&flow=xtls-rprx-vision#LA-Reality
 NODE_JP=vless://uuid@example.net:443?type=ws&security=tls&sni=example.net&host=example.net&path=%2Fws#JP-WS
 ```
+
+## Subscription Name
+
+Set `SUB_NAME` to customize the subscription name.
+
+If `SUB_NAME` is not configured or is empty, the Worker uses:
+
+```text
+VLESS Subscription
+```
+
+The name is included as the YAML top-level `name` field and in response headers used by some clients.
 
 ## Add Nodes
 
@@ -65,7 +80,9 @@ You do not need to modify code after adding a new node. The Worker discovers it 
 
 ## Custom Rule Providers
 
-Set `CUSTOM_RULES_Provider` to the YAML body that should appear under `rule-providers:`.
+`CUSTOM_RULES_Provider` is empty by default. When it is empty, the Worker does not output a `rule-providers` section.
+
+Set `CUSTOM_RULES_Provider` only when you want to include provider definitions.
 
 Example:
 
@@ -85,8 +102,6 @@ gfw:
   interval: 86400
 ```
 
-If `CUSTOM_RULES_Provider` is empty, the Worker uses the default `reject` and `gfw` providers shown above.
-
 ## Custom Rules
 
 Set `CUSTOM_RULES` to one rule per line.
@@ -105,41 +120,23 @@ If `CUSTOM_RULES` is empty, the Worker uses those default rules.
 
 ## Deploy to Cloudflare Workers
 
-Install dependencies:
-
-```bash
-npm install
-```
-
-Log in to Cloudflare:
-
-```bash
-npx wrangler login
-```
-
-Set secrets:
-
-```bash
-npx wrangler secret put SUB_TOKEN
-npx wrangler secret put NODE_LA
-npx wrangler secret put NODE_JP
-```
-
-Deploy:
-
-```bash
-npm run deploy
-```
-
-You can also configure variables in the Cloudflare Dashboard:
+Use the Cloudflare Dashboard web interface:
 
 1. Open Cloudflare Dashboard.
 2. Go to Workers & Pages.
-3. Create or open `vless-to-clash-sub`.
-4. Open Settings.
-5. Open Variables and Secrets.
-6. Add `SUB_TOKEN`, each `NODE_...`, and optional custom rule variables.
-7. Deploy the Worker.
+3. Choose Create.
+4. Choose Import a repository or Connect to Git.
+5. Connect the GitHub repository that contains this project.
+6. Select the repository and production branch, usually `main`.
+7. Keep the project name as `vless-to-clash-sub`, or choose your own Worker name.
+8. Set the Worker entry file to `src/index.js` if Cloudflare asks for an entry point.
+9. Save and deploy.
+10. Open the deployed Worker settings.
+11. Open Variables and Secrets.
+12. Add `SUB_TOKEN`, optional `SUB_NAME`, each `NODE_...`, and optional custom rule variables.
+13. Redeploy if Cloudflare asks you to apply variable changes.
+
+After GitHub integration is enabled, future pushes to the selected branch can trigger a new Cloudflare deployment automatically, depending on your Cloudflare project settings.
 
 ## Bind a Custom Domain
 
@@ -148,13 +145,13 @@ You can also configure variables in the Cloudflare Dashboard:
 3. Open the Worker.
 4. Open Settings.
 5. Open Triggers.
-6. Add a Custom Domain, for example `sub.starrkang.me`.
+6. Add a Custom Domain, for example `sub.example.com`.
 7. Wait for Cloudflare to activate the route.
 
-After binding the domain, your subscription URL will look like:
+After binding a domain, your subscription URL will look like:
 
 ```text
-https://sub.starrkang.me/clash?token=replace-with-a-long-random-token
+https://sub.example.com/clash?token=replace-with-a-long-random-token
 ```
 
 ## Import in Clash Verge / FiClash / Mihomo
@@ -162,7 +159,7 @@ https://sub.starrkang.me/clash?token=replace-with-a-long-random-token
 Use the subscription URL:
 
 ```text
-https://sub.starrkang.me/clash?token=replace-with-a-long-random-token
+https://sub.example.com/clash?token=replace-with-a-long-random-token
 ```
 
 Clash Verge:
@@ -193,7 +190,7 @@ Use the generated YAML as a remote profile URL in your client, or download it an
 ## Security Notes
 
 - Use a long random `SUB_TOKEN`.
-- Do not commit `.env`, `.dev.vars`, real node URLs, UUIDs, private server domains, or tokens.
+- Do not commit `.env`, `.dev.vars`, real node URLs, UUIDs, private server domains, custom domains, or tokens.
 - Rotate `SUB_TOKEN` if it has ever been shared.
 - Prefer Cloudflare Worker secrets for `SUB_TOKEN` and node URLs.
 - Keep the GitHub repository free of sensitive production values.
